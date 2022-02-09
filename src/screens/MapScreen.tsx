@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dimensions,
   StyleSheet,
@@ -14,7 +14,10 @@ import MapView, {
   Polygon,
   PROVIDER_GOOGLE,
 } from "react-native-maps";
+import * as Location from "expo-location";
+import * as TaskManager from "expo-task-manager";
 import pin from "../../assets/images/pin.png";
+import { Position } from "../models/position";
 
 const { width, height } = Dimensions.get("window");
 
@@ -31,33 +34,101 @@ const INITIAL_REGION = {
   longitudeDelta: LONGITUDE_DELTA,
 };
 
-type MyPolygon = {
-  coordinates: LatLng[];
-};
+const LOCATION_TASK_NAME = "background-location-task";
 
 export default function MapScreen() {
-  const [polygons, setPolygons] = useState<MyPolygon[]>([]);
-  const [editing, setEditing] = useState<MyPolygon | null>();
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [startLocationTask, setStartLocationTask] = useState(true);
 
-  const onPress = (e: MapEvent) => {
-    if (!editing) {
-      setEditing({
-        coordinates: [e.nativeEvent.coordinate],
-      });
+  const requestPermissions = async () => {
+    const resultForeground = await Location.requestForegroundPermissionsAsync();
+    if (resultForeground.status === "granted") {
+      const resultBackground =
+        await Location.requestBackgroundPermissionsAsync();
+      if (resultBackground.status === "granted") {
+        await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
+    }
+  };
+
+  const getPositions = async () => {
+    fetch("http://192.168.0.11:3001/v1/position", {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "GET",
+    }).then(async (response) => {
+      const json = await response.json();
+      if (response.ok) {
+        setPositions(json.positions);
+      } else {
+        console.log(json.message);
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (positions.length > 0 && startLocationTask) {
+      setStartLocationTask(false);
+      requestPermissions();
+    }
+  }, [positions, startLocationTask]);
+
+  useEffect(() => {
+    getPositions();
+  }, []);
+
+  TaskManager.defineTask(LOCATION_TASK_NAME, ({ data, error }) => {
+    if (error) {
+      console.log(error);
+    } else if (data) {
+      const { locations } = data as any;
+      if (locations && locations.length > 0) {
+        const id = positions.length > 0 ? positions[0].id : 0;
+        const position = {
+          lat: locations[0].coords.latitude,
+          lng: locations[0].coords.longitude,
+          accuracy: locations[0].coords.accuracy,
+          heading: locations[0].coords.heading,
+        };
+        if (id > 0) {
+          (position as any).id = id;
+        }
+        console.log("saving: ", position);
+        const method = id > 0 ? "PUT" : "POST";
+        fetch("http://192.168.0.11:3001/v1/position", {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          method,
+          body: JSON.stringify(position),
+        }).then(async (response) => {
+          const json = await response.json();
+          if (response.ok) {
+            getPositions();
+          } else {
+            console.log(json.message);
+          }
+        });
+      }
     } else {
-      setEditing({
-        ...editing,
-        coordinates: [...editing.coordinates, e.nativeEvent.coordinate],
-      });
+      console.log("Nenhum dado recebido");
     }
+  });
+
+  const getCoordinate = (position: Position) => {
+    const coord = {
+      latitude: position.lat,
+      longitude: position.lng,
+      latitudeDelta: LATITUDE_DELTA,
+      longitudeDelta: LONGITUDE_DELTA,
+    };
+    return coord;
   };
 
-  const finish = () => {
-    if (editing) {
-      setPolygons([...polygons, editing]);
-      setEditing(null);
-    }
-  };
+  // console.log("positions: ", positions);
 
   return (
     <View style={styles.container}>
@@ -65,41 +136,21 @@ export default function MapScreen() {
         provider={PROVIDER_GOOGLE}
         initialRegion={INITIAL_REGION}
         style={styles.map}
-        onPress={onPress}
       >
-        <Marker coordinate={INITIAL_REGION} image={pin}>
-          <Callout>
-            <View>
-              <Text>Janela de informação</Text>
-            </View>
-          </Callout>
-        </Marker>
-        {polygons.map((polygon, index) => (
-          <Polygon
-            key={`polygon_${index}`}
-            coordinates={polygon.coordinates}
-            strokeColor="#F00"
-            fillColor="rgba(255,0,0,0.5)"
-            strokeWidth={2}
-          />
+        {positions.map((position, index) => (
+          <Marker
+            key={`marker_${index}`}
+            coordinate={getCoordinate(position)}
+            image={pin}
+          >
+            <Callout>
+              <View>
+                <Text>Janela de informação</Text>
+              </View>
+            </Callout>
+          </Marker>
         ))}
-        {editing ? (
-          <Polygon
-            key={`polygon_${polygons.length + 1}`}
-            coordinates={editing.coordinates}
-            strokeColor="#F00"
-            fillColor="rgba(255,0,0,0.5)"
-            strokeWidth={2}
-          />
-        ) : null}
       </MapView>
-      {editing ? (
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button} onPress={() => finish()}>
-            <Text>Finalizar</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
     </View>
   );
 }
