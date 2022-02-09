@@ -18,6 +18,7 @@ import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import pin from "../../assets/images/pin.png";
 import { Position } from "../models/position";
+import Toast from "react-native-root-toast";
 
 const { width, height } = Dimensions.get("window");
 
@@ -53,6 +54,28 @@ export default function MapScreen() {
     }
   };
 
+  const distance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    if (lat1 == lat2 && lon1 == lon2) {
+      return 0;
+    } else {
+      const radlat1 = (Math.PI * lat1) / 180;
+      const radlat2 = (Math.PI * lat2) / 180;
+      const theta = lon1 - lon2;
+      const radtheta = (Math.PI * theta) / 180;
+      let dist =
+        Math.sin(radlat1) * Math.sin(radlat2) +
+        Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+      if (dist > 1) {
+        dist = 1;
+      }
+      dist = Math.acos(dist);
+      dist = (dist * 180) / Math.PI;
+      dist = dist * 60 * 1.1515;
+      dist = dist * 1.609344;
+      return dist;
+    }
+  };
+
   const getPositions = async () => {
     fetch("http://192.168.0.11:3001/v1/position", {
       headers: {
@@ -63,6 +86,18 @@ export default function MapScreen() {
       const json = await response.json();
       if (response.ok) {
         setPositions(json.positions);
+        if (json.positions.length > 1) {
+          const pos1 = json.positions[0];
+          const pos2 = json.positions[1];
+          const dist = distance(pos1.lat, pos1.lng, pos2.lat, pos2.lng);
+          console.log("distância: ", dist);
+          if (dist < 0.5) {
+            console.log("Amigo próximo");
+            Toast.show("Amigo próximo.", {
+              duration: Toast.durations.LONG,
+            });
+          }
+        }
       } else {
         console.log(json.message);
       }
@@ -87,11 +122,12 @@ export default function MapScreen() {
       const { locations } = data as any;
       if (locations && locations.length > 0) {
         const id = positions.length > 0 ? positions[0].id : 0;
+        // -27.590909, -48.549105
         const position = {
           lat: locations[0].coords.latitude,
           lng: locations[0].coords.longitude,
           accuracy: locations[0].coords.accuracy,
-          heading: locations[0].coords.heading,
+          heading: Math.round(locations[0].coords.heading),
         };
         if (id > 0) {
           (position as any).id = id;
