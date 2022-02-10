@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   Dimensions,
+  Image,
+  Modal,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -19,6 +22,7 @@ import * as TaskManager from "expo-task-manager";
 import pin from "../../assets/images/pin.png";
 import { Position } from "../models/position";
 import Toast from "react-native-root-toast";
+import icProfile from "../../assets/images/ic_profile.png";
 
 const { width, height } = Dimensions.get("window");
 
@@ -40,6 +44,8 @@ const LOCATION_TASK_NAME = "background-location-task";
 export default function MapScreen() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [startLocationTask, setStartLocationTask] = useState(true);
+
+  const [modalVisible, setModalVisible] = useState(false);
 
   const requestPermissions = async () => {
     const resultForeground = await Location.requestForegroundPermissionsAsync();
@@ -90,7 +96,7 @@ export default function MapScreen() {
           const pos1 = json.positions[0];
           const pos2 = json.positions[1];
           const dist = distance(pos1.lat, pos1.lng, pos2.lat, pos2.lng);
-          console.log("distância: ", dist);
+          // console.log("distância: ", dist);
           if (dist < 0.5) {
             console.log("Amigo próximo");
             Toast.show("Amigo próximo.", {
@@ -119,6 +125,7 @@ export default function MapScreen() {
     if (error) {
       console.log(error);
     } else if (data) {
+      console.log(data);
       const { locations } = data as any;
       if (locations && locations.length > 0) {
         const id = positions.length > 0 ? positions[0].id : 0;
@@ -126,7 +133,7 @@ export default function MapScreen() {
         const position = {
           lat: locations[0].coords.latitude,
           lng: locations[0].coords.longitude,
-          accuracy: locations[0].coords.accuracy,
+          accuracy: Math.round(locations[0].coords.accuracy),
           heading: Math.round(locations[0].coords.heading),
         };
         if (id > 0) {
@@ -140,14 +147,16 @@ export default function MapScreen() {
           },
           method,
           body: JSON.stringify(position),
-        }).then(async (response) => {
-          const json = await response.json();
-          if (response.ok) {
-            getPositions();
-          } else {
-            console.log(json.message);
-          }
-        });
+        })
+          .then(async (response) => {
+            const json = await response.json();
+            if (response.ok) {
+              getPositions();
+            } else {
+              console.log(json.message);
+            }
+          })
+          .catch((e) => console.log());
       }
     } else {
       console.log("Nenhum dado recebido");
@@ -172,6 +181,7 @@ export default function MapScreen() {
         provider={PROVIDER_GOOGLE}
         initialRegion={INITIAL_REGION}
         style={styles.map}
+        showsUserLocation
       >
         {positions.map((position, index) => (
           <Marker
@@ -187,6 +197,30 @@ export default function MapScreen() {
           </Marker>
         ))}
       </MapView>
+      {modalVisible ? (
+        <View style={styles.modal}>
+          <View style={styles.modalBody}>
+            <Text style={styles.modalTitle}>Perfil</Text>
+            <TextInput style={styles.input} placeholder="Nome de usuário" />
+            <TextInput style={styles.input} placeholder="Nome" />
+            <TouchableOpacity style={[styles.buttonModal, styles.buttonSave]}>
+              <Text style={styles.buttonSaveText}>Salvar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.buttonModal, styles.buttonCancel]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.buttonCancelText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+      <TouchableOpacity
+        style={styles.profileButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <Image source={icProfile} style={styles.profileImage} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -217,5 +251,70 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginHorizontal: 10,
     backgroundColor: "rgba(255,255,255,0.8)",
+  },
+  profileButton: {
+    position: "absolute",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1,
+    left: 10,
+    top: 30,
+    backgroundColor: "rgba(255,255,255,0.5)",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  profileImage: {
+    width: 40,
+    height: 40,
+  },
+  modal: {
+    position: "absolute",
+    zIndex: 2,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontWeight: "bold",
+    marginBottom: 14,
+  },
+  modalBody: {
+    backgroundColor: "#fff",
+    width: "70%",
+    padding: 14,
+    borderRadius: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 8,
+    height: 40,
+    marginBottom: 8,
+    paddingHorizontal: 8,
+  },
+  buttonModal: {
+    backgroundColor: "#bbb",
+    marginBottom: 8,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  buttonSave: {
+    backgroundColor: "#00f",
+  },
+  buttonCancel: {
+    backgroundColor: "transparent",
+  },
+  buttonSaveText: {
+    color: "#fff",
+  },
+  buttonCancelText: {
+    color: "#00f",
   },
 });
