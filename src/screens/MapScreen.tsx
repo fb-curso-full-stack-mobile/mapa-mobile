@@ -155,35 +155,38 @@ export default function MapScreen() {
       positions &&
       positions.length > 0 &&
       polygons &&
-      polygons.length > 0
+      polygons.length > 0 &&
+      myPositionId > 0
     ) {
-      setCheckArea(false);
       let position = positions.find((position) => position.id === myPositionId);
-      for (const polygon of polygons) {
-        const coordinates = polygon.coordinates.map((coord) => {
-          return { latitude: coord.latitude, longitude: coord.longitude };
-        });
-        console.log("coordinates: ", coordinates);
-        const center = geolib.getCenter(coordinates);
-        console.log("center: ", center);
-        console.log("position: ", position);
-        if (position && center) {
-          const dis = distance(
-            position.lat,
-            position.lng,
-            center.latitude,
-            center.longitude
-          );
-          console.log("dis: ", dis);
-          if (dis < 1) {
-            Toast.show("Próximo da área.", {
-              duration: Toast.durations.LONG,
-            });
+      if (position) {
+        setCheckArea(false);
+        for (const polygon of polygons) {
+          const coordinates = polygon.coordinates.map((coord) => {
+            return { latitude: coord.latitude, longitude: coord.longitude };
+          });
+          console.log("coordinates: ", coordinates);
+          const center = geolib.getCenter(coordinates);
+          console.log("center: ", center);
+          console.log("position: ", position);
+          if (position && center) {
+            const dis = distance(
+              position.lat,
+              position.lng,
+              center.latitude,
+              center.longitude
+            );
+            console.log("dis: ", dis);
+            if (dis < 1) {
+              Toast.show("Próximo da área.", {
+                duration: Toast.durations.LONG,
+              });
+            }
           }
         }
       }
     }
-  }, [positions, checkArea, polygons]);
+  }, [positions, checkArea, polygons, myPositionId]);
 
   useEffect(() => {
     if (positions.length > 0 && startLocationTask) {
